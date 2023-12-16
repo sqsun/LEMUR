@@ -6,11 +6,8 @@
 #' @param cellgroup2 the index of cells from group2
 #' @return A dataframe with t-score, p-value, and BH p-value for each gene in a row
 #' @examples
-#' n_cell = 100
-#' n_gene = 1000
-#' lambda = runif(n_gene, 0, 5)
-#' counts = t(sapply(lambda, function(l)rpois(n_cell,l)))
-#' simple_mean_DE(counts, 1:(n_cell/2), (n_cell/2+1):n_cell)
+#' data(Bcells_sce)
+#' simple_mean_DE(counts(Bcells_sce), Bcells_sce$stim == "ctrl", Bcells_sce$stim == "stim")
 #' @export
 simple_mean_DE = function(counts, cellgroup1, cellgroup2){
   tmpcount1 = counts[,cellgroup1]
@@ -26,7 +23,7 @@ simple_mean_DE = function(counts, cellgroup1, cellgroup2){
     tmpmean2 = Matrix::rowMeans(tmpcount2)
   }
   df = data.frame(genes = rownames(counts))
-  df$t = sapply(1:nrow(counts), FUN = function(i){t.test(tmpcount1[i,], tmpcount2[i,])$statistic})
+  df$t = sapply(1:nrow(counts), FUN = function(i){stats::t.test(tmpcount1[i,], tmpcount2[i,])$statistic})
   df$pval = 2*stats::pt(-abs(df$t), df = length(cellgroup1) + length(cellgroup2) -1)
   df$BHpval = stats::p.adjust(df$pval, method = "BH")
   return(df)
@@ -40,21 +37,20 @@ simple_mean_DE = function(counts, cellgroup1, cellgroup2){
 #' @param freq_expressed a threshold for gene detection rate.
 #' @return A dataframe of Poisson glmm DE results with each row for a gene.
 #' @examples
-#' n_cell = ncol(sce)
-#' poisson_glmm_DE(sce, sample(c(1,2),n_cell, replace = T), sample(1:5, ncell, replace = T))
+#' data(Bcells_sce)
+#' poisson_glmm_DE(Bcells_sce, Bcells_sce$stim, Bcells_sce$ind)
 #' @export
 poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
   countdf = data.frame(cellgroups = as.factor(cellgroups),
-                       repgroups = as.factor(repgroups),
-                       ls = colSums(sce@assays@data$counts))
+                       repgroups = as.factor(repgroups))
   pval = rep(NA,nrow(sce@assays@data$counts))
   mu = rep(NA,nrow(sce@assays@data$counts))
   beta_cellgroups = rep(NA,nrow(sce@assays@data$counts))
   status = rep("done", nrow(sce@assays@data$counts))
   res_square = rep(NA,nrow(sce@assays@data$counts))
-  REvariation = rep(NA,nrow(sce@assays@data$counts))
-  FEvariation = rep(NA,nrow(sce@assays@data$counts))
-  RESvariation = rep(NA,nrow(sce@assays@data$counts))
+  # REvariation = rep(NA,nrow(sce@assays@data$counts))
+  # FEvariation = rep(NA,nrow(sce@assays@data$counts))
+  # RESvariation = rep(NA,nrow(sce@assays@data$counts))
 
   for(i in 1:nrow(sce@assays@data$counts)){
     countdf$count = round(pmax(sce@assays@data$counts[i,],0))
@@ -67,24 +63,24 @@ poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
         next
       }
     }
-    gm = tryCatch(summary(MASS::glmmPQL(count~cellgroups, random = ~1|repgroups, family = poisson, data = countdf, verbose = FALSE)),
+    gm = tryCatch(summary(MASS::glmmPQL(count~cellgroups, random = ~1|repgroups, family = stats::poisson, data = countdf, verbose = FALSE)),
                   error = function(e){NULL})
     if (is.null(gm)){
       status[i] = "not converge"
       next
     }
-    gm_null = tryCatch(summary(MASS::glmmPQL(count~1, random = ~1|repgroups, family = poisson, data = countdf, verbose = FALSE)),
+    gm_null = tryCatch(summary(MASS::glmmPQL(count~1, random = ~1|repgroups, family = stats::poisson, data = countdf, verbose = FALSE)),
                   error = function(e){NULL})
     pval[i] = gm$tTable[2 ,"p-value"]
     res_square[i] = gm$sigma^2
     mu[i] = gm$coefficients$fixed[1]
     beta_cellgroups[i] = gm$coefficients$fixed[2]
-    rsquared = tryCatch(r.squaredGLMM(gm, gm_null, pj2014 = T), error = function(e){NULL})
-    if (!is.null(rsquared)){
-      REvariation[i] = rsquared[1,2] - rsquared[1,1]
-      FEvariation[i] = rsquared[1,1]
-      RESvariation[i] = 1-rsquared[1,2]
-    }
+    # rsquared = tryCatch(r.squaredGLMM(gm, gm_null, pj2014 = T), error = function(e){NULL})
+    # if (!is.null(rsquared)){
+    #   REvariation[i] = rsquared[1,2] - rsquared[1,1]
+    #   FEvariation[i] = rsquared[1,1]
+    #   RESvariation[i] = 1-rsquared[1,2]
+    # }
   }
   df = data.frame(genes = rownames(sce@assays@data$counts))
   df$mu = mu
@@ -93,10 +89,10 @@ poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
   df$sigma_square = res_square
   df$pval = pval
   df$status = status
-  df$BH = p.adjust(df$pval, method = "BH")
-  df$REvariation = REvariation
-  df$FEvariation = FEvariation
-  df$RESvariation = RESvariation
+  df$BH = stats::p.adjust(df$pval, method = "BH")
+  # df$REvariation = REvariation
+  # df$FEvariation = FEvariation
+  # df$RESvariation = RESvariation
   return(df)
 }
 
@@ -108,8 +104,8 @@ poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
 #' @param freq_expressed a threshold for gene detection rate.
 #' @return A dataframe of Binomial glmm DE results with each row for a gene.
 #' @examples
-#' n_cell = ncol(sce)
-#' binomial_glmm_DE(sce, sample(c(1,2),n_cell, replace = T), sample(1:5, ncell, replace = T))
+#' data(Bcells_sce)
+#' binomial_glmm_DE(Bcells_sce, Bcells_sce$stim, Bcells_sce$ind)
 #' @export
 binomial_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
   countdf = data.frame(cellgroups = as.factor(cellgroups), repgroups = as.factor(repgroups))
@@ -129,12 +125,12 @@ binomial_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
         next
       }
     }
-    genemean_bygroup = aggregate(count ~ cellgroups, data = countdf, FUN = mean)
+    genemean_bygroup = stats::aggregate(count ~ cellgroups, data = countdf, FUN = mean)
     if (genemean_bygroup$count[1] == genemean_bygroup$count[2]){
       status[i] = "no difference between groups"
       next
     }
-    gm = tryCatch(summary(MASS::glmmPQL(count~cellgroups, random = ~1|repgroups, family = binomial, data = countdf, verbose = FALSE, niter = 50)),
+    gm = tryCatch(summary(MASS::glmmPQL(count~cellgroups, random = ~1|repgroups, family = stats::binomial, data = countdf, verbose = FALSE, niter = 50)),
                   error = function(e){NULL})
     if (is.null(gm)){
       status[i] = "not converge"
@@ -184,8 +180,8 @@ binomial_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
 #' @param freq_expressed a threshold for gene detection rate.
 #' @return A dataframe of MAST DE results with each row for a gene.
 #' @examples
-#' n_cell = ncol(sce)
-#' MAST_DE(sce, sample(c(1,2),n_cell, replace = T), sample(1:5, ncell, replace = T))
+#' data(Bcells_sce)
+#' MAST_DE(Bcells_sce, Bcells_sce$stim, Bcells_sce$ind)
 #' @export
 MAST_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
   sca = MAST::FromMatrix(log2(edgeR::cpm(round(pmax(sce@assays@data$counts,0)))+1),
@@ -204,13 +200,14 @@ MAST_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
   return(df)
 }
 #' Identify DEGs for a list of genes after performing DE analysis.
+#'
 #' An old framework select genes with adjusted p-values smaller than
 #' a threshold and absolute log2 fold change greater than a threshold.
 #' A new framework filters out genes with small average log2 gene means,
 #' but genes showing large difference in mean would be considered as a
 #' candidate for DEGs.
 #'
-#' @param BH a vector of adjusted p-values obtained from a DE analysis
+#' @param adj_pval a vector of adjusted p-values obtained from a DE analysis
 #' @param log2FC a vector of log2 fold change obtained from a DE analysis
 #' @param log2mean a vector of log2(genemean1*genemean2)/2 with genemean1 and genemean2 representing the gene mean from raw counts
 #' @param log2meandiff a vector of log2(abs(genemean1-genemean2)) with genemean1 and genemean2 representing the gene mean from raw counts

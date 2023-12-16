@@ -19,3 +19,4 @@ Imports:
     stats,
     MAST
 biocViews: Sequencing, SingleCell, GeneExpression, DifferentialExpression
+RoxygenNote: 7.2.3
