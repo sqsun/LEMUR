@@ -62,14 +62,14 @@ To determine DEGs, we implemented `identifyDEGs` to perform either conventional 
 
 ```{r}
 # conventional criteria
-pois_glmm_df$conv_DEGs = identifyDEGs(pois_glmm_df$BH, pois_glmm_df$log2FC, log2FCcutoff = 1)
+pois_glmm_df$conv_DEGs = identifyDEGs(pois_glmm_df$BH, pois_glmm_df$log2FC, log2FCcutoff = 1, newcriteria = F)
 ```
 
 We proposed new criteria that are based on the convention plus the gene mean and the difference in mean. If the log2 gene mean in two groups is lower than a certain value (-2.25 by default) and the log2 mean difference is smaller than a threshold (-1 by default), the gene would not be considered as a DEG. These can also be used as a filter before any DE analysis to speed up the computation. Both criteria are adjustable, depending on the dataset's performance and characteristics.
 
 ```{r}
 # new criteria
-pois_glmm_df$new_DEGs = identifyDEGs(pois_glmm_df$BH, pois_glmm_df$log2FC, pois_glmm_df$log2mean, pois_glmm_df$log2meandiff, newcriteria = T, log2FCcutoff = 1)
+pois_glmm_df$new_DEGs = identifyDEGs(pois_glmm_df$BH, pois_glmm_df$log2FC, pois_glmm_df$log2mean, pois_glmm_df$log2meandiff, log2FCcutoff = 1)
 ```
 
 The volcano plots below demonstrate the DEGs from different criteria.

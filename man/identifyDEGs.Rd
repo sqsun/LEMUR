@@ -13,7 +13,7 @@ identifyDEGs(
   log2FCcutoff = log2(1.5),
   log2meancutoff = -2.25,
   log2meandiffcutoff = -1,
-  newcriteria = F
+  newcriteria = T
 )
 }
 \arguments{
