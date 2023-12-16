@@ -2,10 +2,24 @@
 % Please edit documentation in R/DE_methods.R
 \name{simple_mean_DE}
 \alias{simple_mean_DE}
-\title{simple_mean_DE(counts(Bcells_sce), Bcells_sce$stim == "ctrl", Bcells_sce$stim == "stim")}
+\title{Two-sample t-test for gene expressions between two groups}
 \usage{
 simple_mean_DE(counts, cellgroup1, cellgroup2)
 }
+\arguments{
+\item{counts}{gene expression matrix with gene rows and cell columns}
+
+\item{cellgroup1}{the index of cells from group1}
+
+\item{cellgroup2}{the index of cells from group2}
+}
+\value{
+A dataframe with t-score, p-value, and BH p-value for each gene in a row
+}
 \description{
+Two-sample t-test for gene expressions between two groups
+}
+\examples{
+data(Bcells_sce)
 simple_mean_DE(counts(Bcells_sce), Bcells_sce$stim == "ctrl", Bcells_sce$stim == "stim")
 }
