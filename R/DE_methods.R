@@ -90,6 +90,10 @@ poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
   df$pval = pval
   df$status = status
   df$BH = stats::p.adjust(df$pval, method = "BH")
+  genemean1 = rowMeans(counts(sce)[,cellgroups==levels(cellgroups)[1]])
+  genemean2 = rowMeans(counts(sce)[,cellgroups==levels(cellgroups)[2]])
+  df$log2mean = log2(genemean1*genemean2)/2
+  df$log2meandiff = log2(abs(genemean1-genemean2))
   # df$REvariation = REvariation
   # df$FEvariation = FEvariation
   # df$RESvariation = RESvariation
@@ -149,6 +153,10 @@ binomial_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
   df$pval = pval
   df$status = status
   df$BH = stats::p.adjust(df$pval, method = "BH")
+  genemean1 = rowMeans(counts(sce)[,cellgroups==levels(cellgroups)[1]])
+  genemean2 = rowMeans(counts(sce)[,cellgroups==levels(cellgroups)[2]])
+  df$log2mean = log2(genemean1*genemean2)/2
+  df$log2meandiff = log2(abs(genemean1-genemean2))
   return(df)
 }
 
