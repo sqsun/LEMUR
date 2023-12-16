@@ -23,5 +23,5 @@ An implementation Poisson glmm DE method.
 }
 \examples{
 data(Bcells_sce)
-poisson_glmm_DE(Bcells_sce, Bcells_sce$stim, Bcells_sce$ind)
+poisson_glmm_DE(Bcells_sce[1:10,], Bcells_sce$stim, Bcells_sce$ind)
 }

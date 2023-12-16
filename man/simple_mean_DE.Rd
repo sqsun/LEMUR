@@ -21,5 +21,5 @@ Two-sample t-test for gene expressions between two groups
 }
 \examples{
 data(Bcells_sce)
-simple_mean_DE(counts(Bcells_sce), Bcells_sce$stim == "ctrl", Bcells_sce$stim == "stim")
+simple_mean_DE(Bcells_sce@assays@data$counts, Bcells_sce$stim == "ctrl", Bcells_sce$stim == "stim")
 }

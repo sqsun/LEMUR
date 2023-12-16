@@ -23,5 +23,5 @@ An implementation of Binomial glmm DE method.
 }
 \examples{
 data(Bcells_sce)
-binomial_glmm_DE(Bcells_sce, Bcells_sce$stim, Bcells_sce$ind)
+binomial_glmm_DE(Bcells_sce[1:10,], Bcells_sce$stim, Bcells_sce$ind)
 }

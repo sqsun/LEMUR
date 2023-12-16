@@ -7,7 +7,7 @@
 #' @return A dataframe with t-score, p-value, and BH p-value for each gene in a row
 #' @examples
 #' data(Bcells_sce)
-#' simple_mean_DE(counts(Bcells_sce), Bcells_sce$stim == "ctrl", Bcells_sce$stim == "stim")
+#' simple_mean_DE(Bcells_sce@assays@data$counts, Bcells_sce$stim == "ctrl", Bcells_sce$stim == "stim")
 #' @export
 simple_mean_DE = function(counts, cellgroup1, cellgroup2){
   tmpcount1 = counts[,cellgroup1]
@@ -38,16 +38,14 @@ simple_mean_DE = function(counts, cellgroup1, cellgroup2){
 #' @return A dataframe of Poisson glmm DE results with each row for a gene.
 #' @examples
 #' data(Bcells_sce)
-#' poisson_glmm_DE(Bcells_sce, Bcells_sce$stim, Bcells_sce$ind)
+#' poisson_glmm_DE(Bcells_sce[1:10,], Bcells_sce$stim, Bcells_sce$ind)
 #' @export
 poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
   countdf = data.frame(cellgroups = as.factor(cellgroups),
                        repgroups = as.factor(repgroups))
-  pval = rep(NA,nrow(sce@assays@data$counts))
-  mu = rep(NA,nrow(sce@assays@data$counts))
-  beta_cellgroups = rep(NA,nrow(sce@assays@data$counts))
-  status = rep("done", nrow(sce@assays@data$counts))
-  res_square = rep(NA,nrow(sce@assays@data$counts))
+  df = data.frame(genes = rownames(sce@assays@data$counts), mu = NA, beta_cellgroups = NA,
+                  log2FC = NA, sigma_square = NA, status = "done", pval = NA, BH = NA,
+                  log2mean = NA, log2meandiff = NA)
   # REvariation = rep(NA,nrow(sce@assays@data$counts))
   # FEvariation = rep(NA,nrow(sce@assays@data$counts))
   # RESvariation = rep(NA,nrow(sce@assays@data$counts))
@@ -56,25 +54,29 @@ poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
     countdf$count = round(pmax(sce@assays@data$counts[i,],0))
     if (mean(countdf$count!=0, na.rm = TRUE) <= freq_expressed) {
       if(mean(countdf$count!=0, na.rm = TRUE) == 0){
-        status[i] = "zero mean"
+        df$status[i] = "zero mean"
         next
       }else{
-        status[i] = "lowly expressed"
+        df$status[i] = "lowly expressed"
         next
       }
     }
     gm = tryCatch(summary(MASS::glmmPQL(count~cellgroups, random = ~1|repgroups, family = stats::poisson, data = countdf, verbose = FALSE)),
                   error = function(e){NULL})
     if (is.null(gm)){
-      status[i] = "not converge"
+      df$status[i] = "not converge"
       next
     }
     gm_null = tryCatch(summary(MASS::glmmPQL(count~1, random = ~1|repgroups, family = stats::poisson, data = countdf, verbose = FALSE)),
                   error = function(e){NULL})
-    pval[i] = gm$tTable[2 ,"p-value"]
-    res_square[i] = gm$sigma^2
-    mu[i] = gm$coefficients$fixed[1]
-    beta_cellgroups[i] = gm$coefficients$fixed[2]
+    df$pval[i] = gm$tTable[2 ,"p-value"]
+    df$sigma_square[i] = gm$sigma^2
+    df$mu[i] = gm$coefficients$fixed[1]
+    df$beta_cellgroups[i] = gm$coefficients$fixed[2]
+    genemean1 = mean(countdf$count[cellgroups==levels(cellgroups)[1]])
+    genemean2 = mean(countdf$count[cellgroups==levels(cellgroups)[2]])
+    df$log2mean[i] = log2(genemean1*genemean2)/2
+    df$log2meandiff[i] = log2(abs(genemean1-genemean2))
     # rsquared = tryCatch(r.squaredGLMM(gm, gm_null, pj2014 = T), error = function(e){NULL})
     # if (!is.null(rsquared)){
     #   REvariation[i] = rsquared[1,2] - rsquared[1,1]
@@ -82,18 +84,9 @@ poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
     #   RESvariation[i] = 1-rsquared[1,2]
     # }
   }
-  df = data.frame(genes = rownames(sce@assays@data$counts))
-  df$mu = mu
-  df$beta_cellgroups = beta_cellgroups
-  df$log2FC = log2(exp(beta_cellgroups))
-  df$sigma_square = res_square
-  df$pval = pval
-  df$status = status
+  df$log2FC = log2(exp(df$beta_cellgroups))
   df$BH = stats::p.adjust(df$pval, method = "BH")
-  genemean1 = rowMeans(counts(sce)[,cellgroups==levels(cellgroups)[1]])
-  genemean2 = rowMeans(counts(sce)[,cellgroups==levels(cellgroups)[2]])
-  df$log2mean = log2(genemean1*genemean2)/2
-  df$log2meandiff = log2(abs(genemean1-genemean2))
+
   # df$REvariation = REvariation
   # df$FEvariation = FEvariation
   # df$RESvariation = RESvariation
@@ -109,54 +102,47 @@ poisson_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
 #' @return A dataframe of Binomial glmm DE results with each row for a gene.
 #' @examples
 #' data(Bcells_sce)
-#' binomial_glmm_DE(Bcells_sce, Bcells_sce$stim, Bcells_sce$ind)
+#' binomial_glmm_DE(Bcells_sce[1:10,], Bcells_sce$stim, Bcells_sce$ind)
 #' @export
 binomial_glmm_DE = function(sce, cellgroups, repgroups, freq_expressed = 0.05){
+
   countdf = data.frame(cellgroups = as.factor(cellgroups), repgroups = as.factor(repgroups))
-  pval = rep(NA,nrow(sce@assays@data$counts))
-  beta_cellgroups = rep(NA,nrow(sce@assays@data$counts))
-  mu = rep(NA,nrow(sce@assays@data$counts))
-  status = rep("done", nrow(sce@assays@data$counts))
-  res_square = rep(NA,nrow(sce@assays@data$counts))
+  df = data.frame(genes = rownames(sce@assays@data$counts), mu = NA, beta_cellgroups = NA,
+                  log2FC = NA, sigma_square = NA, status = "done", pval = NA, BH = NA,
+                  log2mean = NA, log2meandiff = NA)
   for(i in 1:nrow(sce@assays@data$counts)){
     countdf$count = 1*(sce@assays@data$counts[i,]>0)
     if (mean(countdf$count) <= freq_expressed) {
       if(mean(countdf$count) == 0){
-        status[i] = "zero mean"
+        df$status[i] = "zero mean"
         next
       }else{
-        status[i] = "lowly expressed"
+        df$status[i] = "lowly expressed"
         next
       }
     }
     genemean_bygroup = stats::aggregate(count ~ cellgroups, data = countdf, FUN = mean)
     if (genemean_bygroup$count[1] == genemean_bygroup$count[2]){
-      status[i] = "no difference between groups"
+      df$status[i] = "no difference between groups"
       next
     }
     gm = tryCatch(summary(MASS::glmmPQL(count~cellgroups, random = ~1|repgroups, family = stats::binomial, data = countdf, verbose = FALSE, niter = 50)),
                   error = function(e){NULL})
     if (is.null(gm)){
-      status[i] = "not converge"
+      df$status[i] = "not converge"
       next
     }
-    pval[i] = gm$tTable[2 ,"p-value"]
-    beta_cellgroups[i] = gm$coefficients$fixed[2]
-    mu[i] = gm$coefficients$fixed[1]
-    res_square[i] = gm$sigma^2
+    df$pval[i] = gm$tTable[2 ,"p-value"]
+    df$beta_cellgroups[i] = gm$coefficients$fixed[2]
+    df$mu[i] = gm$coefficients$fixed[1]
+    df$sigma_square[i] = gm$sigma^2
+    genemean1 = mean(countdf$count[cellgroups==levels(cellgroups)[1]])
+    genemean2 = mean(countdf$count[cellgroups==levels(cellgroups)[2]])
+    df$log2mean[i] = log2(genemean1*genemean2)/2
+    df$log2meandiff[i] = log2(abs(genemean1-genemean2))
   }
-  df = data.frame(genes = rownames(sce@assays@data$counts))
-  df$beta_cellgroups = beta_cellgroups
-  df$log2FC = log2(exp(beta_cellgroups))
-  df$mu = mu
-  df$sigma_square = res_square
-  df$pval = pval
-  df$status = status
+  df$log2FC = log2(exp(df$beta_cellgroups))
   df$BH = stats::p.adjust(df$pval, method = "BH")
-  genemean1 = rowMeans(counts(sce)[,cellgroups==levels(cellgroups)[1]])
-  genemean2 = rowMeans(counts(sce)[,cellgroups==levels(cellgroups)[2]])
-  df$log2mean = log2(genemean1*genemean2)/2
-  df$log2meandiff = log2(abs(genemean1-genemean2))
   return(df)
 }
 
