@@ -9,6 +9,7 @@ In this vignette, we will demonstrate how to install and use this package.
 **LEMUR** can be installed from github directly as follows:
 ```{r}
 devtools::install_github("C-HW/LEMUR")
+library(LEMUR)
 ```
 
 ## Read Data
@@ -45,51 +46,37 @@ table(Bcells_sce$ind)
 ```
 
 `Bcells_sce` is also accessible with `data(Bcells_sce)`.
-
+```{r}
+data(Bcells_sce)
+```
 
 ## DE analysis
 
-For this dataset, the goal of DE analysis is to determine the DEGs between two different conditions (groups). The function `poisson_glmm_DE` and `binomial_glmm_DE` are designed to perform DE analysis.
+For this dataset, the goal of the DE analysis is to determine the DEGs between two different conditions (groups) within B cells. The function `poisson_glmm_DE` and `binomial_glmm_DE` are designed to perform DE analysis. Here we present the workflow of **LEMUR** by `poisson_glmm_DE` first.
+
+The input requires a `SingleCellExperiment` object `sce` with UMI counts retrievable in `sce@assays@data$counts`, a vector `cellgroups` indicating the group-of-interest, and a vector `repgroups` representing the donor of each cell. For `Bcells_sce`, the information of condition groups and donors is stored in `Bcells_sce$stim` and `Bcells_sce$ind`, respectively.
 
 ```{r}
-pois_glmm_df = poisson_glmm_DE(Bcells_sce, cellgroups = Bcells_sce$stim, repgroups = Bcells_sce$ind)
-binomial_glmm_df = binomial_glmm_DE(Bcells_sce, cellgroups = Bcells_sce$stim, repgroups = Bcells_sce$ind)
+# running time is about 8 minutes.
+pois_glmm_df = poisson_glmm_DE(sce = Bcells_sce, cellgroups = Bcells_sce$stim, repgroups = Bcells_sce$ind)
 ```
 
 ## Determine DEGs
 
-To determine DEGs, we implemented `identifyDEGs` to perform either conventional criteria or our new criteria. The conventional one selects genes satisfying its adjusted p-value passes 0.05 (default) and its absolute value of log2 fold change passes log2(1.5) (default).
+To determine DEGs, we implemented `identifyDEGs` to perform our new criteria, which is a modification of the convention one.  The conventional criteria selects genes satisfying its adjusted p-value passes 0.05 (default) and its absolute value of log2 fold change passes log2(1.5) (default). The new criteria are based on the convention plus the gene mean and the difference in mean.
 
-```{r}
-# conventional criteria
-pois_glmm_df$conv_DEGs = identifyDEGs(pois_glmm_df$BH, pois_glmm_df$log2FC, log2FCcutoff = 1, newcriteria = F)
-```
-
-We proposed new criteria that are based on the convention plus the gene mean and the difference in mean. If the log2 gene mean in two groups is lower than a certain value (-2.25 by default) and the log2 mean difference is smaller than a threshold (-1 by default), the gene would not be considered as a DEG. These can also be used as a filter before any DE analysis to speed up the computation. Both criteria are adjustable, depending on the dataset's performance and characteristics.
+If the log2 gene mean in two groups is lower than a certain value (-2.25 by default) and the log2 mean difference is smaller than a threshold (-1 by default), the gene would not be considered as a DEG. These can also be used as a filter before any DE analysis to speed up the computation. Both thresholds are adjustable, depending on the dataset's performance and characteristics. More details can be found [here](https://c-hw.github.io/DEanalysis/new_criteria.html).
 
 ```{r}
 # new criteria
 pois_glmm_df$new_DEGs = identifyDEGs(pois_glmm_df$BH, pois_glmm_df$log2FC, pois_glmm_df$log2mean, pois_glmm_df$log2meandiff, log2FCcutoff = 1)
 ```
 
-The volcano plots below demonstrate the DEGs from different criteria.
+The volcano plot and heatmap below demonstrate the DEGs.
 ```{r}
 library(ggplot2)
 pvalcutoff = 0.05
-log2FCcutoff = 1
-ggplot(pois_glmm_df, aes(x = log2FC, y = -log10(BH), colour = conv_DEGs)) +
-    geom_point(alpha = 0.5, size = 0.5) +
-    geom_hline(yintercept=-log10(pvalcutoff),linetype=2) +
-    geom_vline(xintercept=log2FCcutoff,linetype=2) + 
-    geom_vline(xintercept=-log2FCcutoff,linetype=2) +
-    theme_bw() + 
-    theme(panel.grid = element_blank()) + 
-    scale_color_manual(values = c("gray", "blue")) +
-    xlim(c(-3,3)) + 
-    ylim(c(0,50)) + 
-    xlab("Log2 Fold Change") + 
-    ylab("-Log10 (adj.pval)")
-    
+log2FCcutoff = 1    
 ggplot(pois_glmm_df, aes(x = log2FC, y = -log10(BH), colour = new_DEGs)) +
     geom_point(alpha = 0.5, size = 0.5) +
     geom_hline(yintercept=-log10(pvalcutoff),linetype=2) +
@@ -104,7 +91,47 @@ ggplot(pois_glmm_df, aes(x = log2FC, y = -log10(BH), colour = new_DEGs)) +
     ylab("-Log10 (adj.pval)")
 ```
 
-We can compare the DEGs from different criteria via heatmaps. It shows that our new criteria largely exclude out the noise.
+```{r}
+sort_log2FC = sort(abs(pois_glmm_df$log2FC[pois_glmm_df$new_DEGs]), index.return = T, decreasing = T)
+sorted_DEGs = pois_glmm_df$genes[which(pois_glmm_df$new_DEGs)][sort_log2FC$ix]
+mat = counts(Bcells_sce)[sorted_DEGs,]
+
+#row annotation
+annotation_log2FC = data.frame(abs_log2FC = sort_log2FC$x)
+rownames(annotation_log2FC) = rownames(mat)
+
+#col annotation
+annotation_df = data.frame(Donor = paste0("D",Bcells_sce$ind), Group = Bcells_sce$stim)
+rownames(annotation_df) = colnames(mat)
+annotation_df = annotation_df[with(annotation_df, order(Group, Donor)), ]
+
+pheatmap(mat[,rownames(annotation_df)], 
+         main = paste0("Poisson-glmm DEGs\nin UMI counts (", nrow(mat)," DEGs)"),
+         annotation_col = annotation_df, 
+         annotation_row = annotation_log2FC,
+         cluster_rows=F, cluster_cols=F, 
+         show_colnames = F, show_rownames = F,
+         annotation_names_row = F,
+         color=colorRampPalette(c("navy", "white", "red"))(10), breaks = seq(0,3, length.out = 10)
+         )
+```
+
+## Alternatives
+
+Some studies have shown that the zero proportion of a gene is an indicator for distinguishing different cell types. Hence, we also implemented Binomial-glmm modeling the zero proportion. The result is similar to Poisson-glmm when the DEGs are chosen from two different cell types. See more examples in the case study 1 [here](https://c-hw.github.io/DEanalysis/index.html#Case_study_1).
+
+The DE result of Binomial-glmm can be obtained by the following command.
+```{r}
+binomial_glmm_df = binomial_glmm_DE(Bcells_sce, cellgroups = Bcells_sce$stim, repgroups = Bcells_sce$ind)
+```
+
+The function `identifyDEGs` also provides another option for conventional criteria.
+```{r}
+# conventional criteria
+pois_glmm_df$conv_DEGs = identifyDEGs(pois_glmm_df$BH, pois_glmm_df$log2FC, log2FCcutoff = 1, newcriteria = F)
+```
+
+However, the heatmap below shows that the convention one may includes plenty of lowly expressed genes. We still recommend to perform the new criteria.
 ```{r}
 # conventional criteria
 library(pheatmap)
@@ -132,30 +159,6 @@ pheatmap(mat[,rownames(annotation_df)],
          )
 ```
 
-```{r}
-sort_log2FC = sort(abs(pois_glmm_df$log2FC[pois_glmm_df$new_DEGs]), index.return = T, decreasing = T)
-sorted_DEGs = pois_glmm_df$genes[which(pois_glmm_df$new_DEGs)][sort_log2FC$ix]
-mat = counts(Bcells_sce)[sorted_DEGs,]
-
-#row annotation
-annotation_log2FC = data.frame(abs_log2FC = sort_log2FC$x)
-rownames(annotation_log2FC) = rownames(mat)
-
-#col annotation
-annotation_df = data.frame(Donor = paste0("D",Bcells_sce$ind), Group = Bcells_sce$stim)
-rownames(annotation_df) = colnames(mat)
-annotation_df = annotation_df[with(annotation_df, order(Group, Donor)), ]
-
-pheatmap(mat[,rownames(annotation_df)], 
-         main = paste0("Poisson-glmm DEGs\nin UMI counts (", nrow(mat)," DEGs)"),
-         annotation_col = annotation_df, 
-         annotation_row = annotation_log2FC,
-         cluster_rows=F, cluster_cols=F, 
-         show_colnames = F, show_rownames = F,
-         annotation_names_row = F,
-         color=colorRampPalette(c("navy", "white", "red"))(10), breaks = seq(0,3, length.out = 10)
-         )
-```
 ## Author
 Chih-Hsuan Wu (U Chicago)    
 Bug report, comments or questions please send to chihhsuan@uchicago.edu.
