@@ -77,7 +77,7 @@ The volcano plot and heatmap below demonstrate the DEGs.
 library(ggplot2)
 pvalcutoff = 0.05
 log2FCcutoff = 1    
-ggplot(pois_glmm_df, aes(x = log2FC, y = -log10(BH), colour = new_DEGs)) +
+ggplot(na.omit(pois_glmm_df), aes(x = log2FC, y = -log10(BH), colour = new_DEGs)) +
     geom_point(alpha = 0.5, size = 0.5) +
     geom_hline(yintercept=-log10(pvalcutoff),linetype=2) +
     geom_vline(xintercept=log2FCcutoff,linetype=2) + 
