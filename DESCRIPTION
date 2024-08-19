@@ -6,7 +6,7 @@ Author: Chih-Hsuan Wu
 Maintainer: Chih-Hsuan Wu <chihhsuan@uchicago.edu>
 Description: Single cell differential expression analysis for multiple samples
 License: GPL (>=2)
-Depends: R (>= 4.2.2)
+Depends: R (>= 4.0.2)
 Encoding: UTF-8
 LazyData: true
 Suggests: knitr, rmarkdown 
